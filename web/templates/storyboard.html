@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+{% block title %}{{ sb.title }} — Clawd Bot{% endblock %}
+
+{% block content %}
+<div class="sb-page">
+  <!-- Page header -->
+  <div class="page-header">
+    <div>
+      <h1>{{ sb.title }}</h1>
+      <span class="status-badge status-{{ sb.status }}">{{ sb.status }}</span>
+    </div>
+    <div class="header-actions">
+      <a class="btn-secondary" href="/storyboards/{{ sb.id }}/characters">Characters</a>
+    </div>
+  </div>
+
+  <!-- Upload Knowledge Base -->
+  <section class="card">
+    <h3>Knowledge Base</h3>
+    <form id="kb-form" enctype="multipart/form-data">
+      <div class="upload-zone" id="drop-zone">
+        <p>Drop .txt, .md, .pdf, or images here</p>
+        <input type="file" id="kb-files" name="files" multiple accept=".txt,.md,.pdf,.png,.jpg,.jpeg,.webp" />
+      </div>
+      <label>Wikipedia / Web URLs (one per line)
+        <textarea name="urls" id="kb-urls" rows="3" placeholder="https://en.wikipedia.org/wiki/Ramayana"></textarea>
+      </label>
+      <button type="button" class="btn-primary" onclick="uploadKnowledge({{ sb.id }})">Upload & Ingest</button>
+      <span id="kb-status" class="status-msg"></span>
+    </form>
+  </section>
+
+  <div class="two-panel">
+    <!-- LEFT: Chat -->
+    <section class="panel chat-panel card">
+      <h3>Story Planning Chat</h3>
+      <div id="chat-messages" class="chat-messages">
+        {% for msg in messages %}
+        <div class="chat-msg {{ msg.role }}">
+          <div class="msg-bubble">{{ msg.content }}</div>
+        </div>
+        {% endfor %}
+      </div>
+      <div class="chat-quick-actions">
+        <button class="chip" onclick="sendQuick('Generate 24 episode outlines for {{ sb.title }}')">
+          Generate 24 Episodes
+        </button>
+        <button class="chip" onclick="sendQuick('Identify the main characters from the knowledge base')">
+          Extract Characters
+        </button>
+      </div>
+      <form id="chat-form" class="chat-input-form">
+        <textarea id="chat-input" placeholder="Ask Claude to plan your story..." rows="2"></textarea>
+        <button type="submit" class="btn-primary">Send</button>
+      </form>
+    </section>
+
+    <!-- RIGHT: Episodes -->
+    <section class="panel episode-panel card">
+      <div class="panel-header">
+        <h3>Episodes <span class="count">({{ episodes|length }})</span></h3>
+        <div>
+          <button class="btn-secondary" onclick="generateOutlines({{ sb.id }})">Generate Outlines</button>
+          <button class="btn-secondary" onclick="extractCharacters({{ sb.id }})">Extract Characters</button>
+        </div>
+      </div>
+      <div id="episode-list" class="episode-list">
+        {% for ep in episodes %}
+        <div class="ep-item" id="ep-{{ ep.id }}">
+          <div class="ep-header">
+            <span class="ep-num">Ep {{ ep.episode_num }}</span>
+            <a href="/episodes/{{ ep.id }}" class="ep-title">{{ ep.title or "Untitled" }}</a>
+            <span class="status-badge status-{{ ep.production_status }}">{{ ep.production_status }}</span>
+          </div>
+          <p class="ep-storyline">{{ ep.storyline[:200] }}{% if ep.storyline|length > 200 %}…{% endif %}</p>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+  </div>
+
+  <!-- Schedule Panel -->
+  <section class="card">
+    <h3>Upload Schedule</h3>
+    <form onsubmit="saveSchedule(event, {{ sb.id }})">
+      <div class="schedule-form">
+        <label>First Upload
+          <input type="datetime-local" name="first_upload_at"
+            value="{{ schedule.first_upload_at.strftime('%Y-%m-%dT%H:%M') if schedule and schedule.first_upload_at else '' }}" />
+        </label>
+        <label>Interval (days)
+          <input type="number" name="interval_days" value="{{ schedule.interval_days if schedule else 7 }}" min="1" />
+        </label>
+        <label>Timezone
+          <input type="text" name="timezone" value="{{ schedule.timezone if schedule else 'UTC' }}" />
+        </label>
+        <button type="submit" class="btn-primary">Save Schedule</button>
+      </div>
+    </form>
+  </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const SB_ID = {{ sb.id }};
+
+async function uploadKnowledge(sbId) {
+  const files = document.getElementById('kb-files').files;
+  const urls = document.getElementById('kb-urls').value;
+  const fd = new FormData();
+  for (const f of files) fd.append('files', f);
+  fd.append('urls', urls);
+  document.getElementById('kb-status').textContent = 'Ingesting…';
+  const res = await fetch(`/storyboards/${sbId}/upload-knowledge`, {method:'POST', body:fd});
+  const data = await res.json();
+  document.getElementById('kb-status').textContent = `✓ Added ${data.added_chunks} chunks`;
+}
+
+async function generateOutlines(sbId) {
+  const n = prompt('How many episodes?', '24');
+  if (!n) return;
+  const fd = new FormData();
+  fd.append('num_episodes', n);
+  const res = await fetch(`/storyboards/${sbId}/generate-outlines`, {method:'POST', body:fd});
+  const data = await res.json();
+  if (data.episodes) {
+    renderEpisodes(data.episodes);
+  }
+}
+
+async function extractCharacters(sbId) {
+  const res = await fetch(`/storyboards/${sbId}/extract-characters`, {method:'POST'});
+  const data = await res.json();
+  alert(`Extracted characters: ${data.added.join(', ') || 'none new'}`);
+}
+
+function renderEpisodes(episodes) {
+  const list = document.getElementById('episode-list');
+  list.innerHTML = episodes.map(ep => `
+    <div class="ep-item">
+      <div class="ep-header">
+        <span class="ep-num">Ep ${ep.episode}</span>
+        <span class="ep-title">${ep.title}</span>
+        <span class="status-badge status-draft">draft</span>
+      </div>
+      <p class="ep-storyline">${ep.storyline.slice(0,200)}${ep.storyline.length>200?'…':''}</p>
+    </div>
+  `).join('');
+}
+
+async function saveSchedule(e, sbId) {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const res = await fetch(`/storyboards/${sbId}/schedule`, {method:'POST', body:fd});
+  const data = await res.json();
+  if (data.ok) alert('Schedule saved!');
+}
+
+function sendQuick(msg) {
+  document.getElementById('chat-input').value = msg;
+  document.getElementById('chat-form').dispatchEvent(new Event('submit'));
+}
+
+// SSE Chat
+document.getElementById('chat-form').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const input = document.getElementById('chat-input');
+  const msg = input.value.trim();
+  if (!msg) return;
+  input.value = '';
+
+  appendChatMsg('user', msg);
+  const assistantDiv = appendChatMsg('assistant', '');
+  const bubble = assistantDiv.querySelector('.msg-bubble');
+
+  const es = new EventSource(`/storyboards/${SB_ID}/chat/stream?message=${encodeURIComponent(msg)}`);
+  es.onmessage = function(event) {
+    const data = JSON.parse(event.data);
+    if (data.token) {
+      bubble.textContent += data.token;
+      scrollChatToBottom();
+    }
+    if (data.done) {
+      es.close();
+    }
+  };
+  es.onerror = function() { es.close(); };
+});
+
+function appendChatMsg(role, content) {
+  const container = document.getElementById('chat-messages');
+  const div = document.createElement('div');
+  div.className = `chat-msg ${role}`;
+  div.innerHTML = `<div class="msg-bubble">${content}</div>`;
+  container.appendChild(div);
+  scrollChatToBottom();
+  return div;
+}
+
+function scrollChatToBottom() {
+  const c = document.getElementById('chat-messages');
+  c.scrollTop = c.scrollHeight;
+}
+</script>
+{% endblock %}

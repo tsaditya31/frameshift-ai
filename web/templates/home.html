@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Clawd Bot — Dashboard{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Story Dashboard</h1>
+  <button class="btn-primary" onclick="document.getElementById('new-sb-modal').style.display='flex'">
+    + New Storyboard
+  </button>
+</div>
+
+{% if boards %}
+<div class="storyboard-grid">
+  {% for b in boards %}
+  <a class="sb-card" href="/storyboards/{{ b.sb.id }}">
+    <div class="sb-card-header">
+      <span class="status-badge status-{{ b.sb.status }}">{{ b.sb.status }}</span>
+    </div>
+    <h2>{{ b.sb.title }}</h2>
+    <p class="sb-desc">{{ b.sb.description or "No description" }}</p>
+    <div class="sb-stats">
+      <div class="stat">
+        <span class="stat-num">{{ b.total }}</span>
+        <span class="stat-label">Episodes</span>
+      </div>
+      <div class="stat">
+        <span class="stat-num">{{ b.published }}</span>
+        <span class="stat-label">Published</span>
+      </div>
+      <div class="stat">
+        <span class="stat-num">{{ b.producing }}</span>
+        <span class="stat-label">Producing</span>
+      </div>
+    </div>
+    {% if b.next_upload %}
+    <p class="next-upload">Next upload: {{ b.next_upload.strftime('%b %d, %Y') }}</p>
+    {% endif %}
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+  <p>No storyboards yet. Create your first one!</p>
+</div>
+{% endif %}
+
+<!-- New Storyboard Modal -->
+<div id="new-sb-modal" class="modal-overlay" style="display:none">
+  <div class="modal">
+    <h2>New Storyboard</h2>
+    <form method="post" action="/storyboards/new">
+      <label>Title
+        <input type="text" name="title" placeholder="e.g. Ramayana" required autofocus />
+      </label>
+      <label>Description
+        <textarea name="description" placeholder="Brief description..." rows="3"></textarea>
+      </label>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" onclick="document.getElementById('new-sb-modal').style.display='none'">Cancel</button>
+        <button type="submit" class="btn-primary">Create</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

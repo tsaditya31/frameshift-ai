@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}Characters — {{ sb.title }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <a href="/storyboards/{{ sb.id }}" class="breadcrumb">← {{ sb.title }}</a>
+    <h1>Characters</h1>
+  </div>
+  <div class="header-actions">
+    <button class="btn-primary" onclick="extractChars()">Auto-Extract from KB</button>
+  </div>
+</div>
+
+<div class="character-grid" id="char-grid">
+  {% for char in characters %}
+  <div class="char-card" id="char-{{ char.id }}">
+    <!-- Hero image -->
+    <div class="char-portrait">
+      {% if char.hero_image_path %}
+      <img src="/output/{{ sb.id }}/characters/{{ char.hero_image_path|basename }}" alt="{{ char.name }}" />
+      {% else %}
+      <div class="char-placeholder">{{ char.name[0] }}</div>
+      {% endif %}
+    </div>
+
+    <div class="char-info">
+      <h3>{{ char.name }}</h3>
+      <p>{{ char.description[:150] }}{% if char.description|length > 150 %}…{% endif %}</p>
+      <span class="status-badge status-{{ char.training_status }}">{{ char.training_status.replace('_', ' ') }}</span>
+
+      {% if char.higgsfield_soul_id %}
+      <p class="soul-id">Soul ID: <code>{{ char.higgsfield_soul_id[:20] }}…</code></p>
+      {% endif %}
+    </div>
+
+    <div class="char-actions">
+      <!-- Upload ref images -->
+      <label class="btn-secondary btn-upload">
+        Upload Reference Images
+        <input type="file" multiple accept="image/*" style="display:none"
+               onchange="uploadRefs({{ char.id }}, this.files)" />
+      </label>
+
+      {% if char.training_status == 'ready_to_train' %}
+      <button class="btn-primary" onclick="trainChar({{ char.id }})">Train Soul ID</button>
+      {% elif char.training_status == 'training' %}
+      <div class="progress-bar"><div class="progress-fill" style="width:60%"></div></div>
+      {% elif char.training_status == 'trained' %}
+      <button class="btn-secondary" onclick="genHeroImage({{ char.id }})">Generate Hero Image</button>
+      {% endif %}
+    </div>
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <p>No characters yet. Auto-extract from the knowledge base, or add manually.</p>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const SB_ID = {{ sb.id }};
+
+async function extractChars() {
+  const res = await fetch(`/storyboards/${SB_ID}/extract-characters`, {method:'POST'});
+  const data = await res.json();
+  alert(`Added: ${data.added.join(', ') || 'none new'}`);
+  location.reload();
+}
+
+async function uploadRefs(charId, files) {
+  const fd = new FormData();
+  for (const f of files) fd.append('images', f);
+  const res = await fetch(`/characters/${charId}/upload-refs`, {method:'POST', body:fd});
+  const data = await res.json();
+  if (data.ok) {
+    alert(`Uploaded ${files.length} images!`);
+    location.reload();
+  }
+}
+
+async function trainChar(charId) {
+  const res = await fetch(`/characters/${charId}/train`, {method:'POST'});
+  const data = await res.json();
+  if (data.ok) {
+    alert('Training started! This takes ~5 minutes.');
+    pollCharStatus(charId);
+  }
+}
+
+async function genHeroImage(charId) {
+  const res = await fetch(`/characters/${charId}/hero-image`, {method:'POST'});
+  const data = await res.json();
+  if (data.ok) {
+    alert('Generating hero image...');
+    pollCharStatus(charId);
+  }
+}
+
+function pollCharStatus(charId) {
+  const interval = setInterval(async () => {
+    const res = await fetch(`/characters/${charId}/status`);
+    const data = await res.json();
+    const card = document.getElementById(`char-${charId}`);
+    if (!card) return;
+    // Update badge
+    const badge = card.querySelector('.status-badge');
+    if (badge) badge.textContent = data.training_status.replace(/_/g, ' ');
+    if (data.training_status === 'trained' || data.training_status === 'failed') {
+      clearInterval(interval);
+      location.reload();
+    }
+  }, 10000);
+}
+</script>
+{% endblock %}

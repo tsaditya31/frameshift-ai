@@ -1,0 +1,13 @@
+.env
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+knowledge/
+output/
+clawd.db
+youtube_token.json
+*.mp4
+*.mp3
+*.wav

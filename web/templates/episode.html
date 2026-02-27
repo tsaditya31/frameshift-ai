@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% block title %}Ep {{ ep.episode_num }}: {{ ep.title }} — Clawd Bot{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <a href="/storyboards/{{ sb.id }}" class="breadcrumb">← {{ sb.title }}</a>
+    <h1>Episode {{ ep.episode_num }}: {{ ep.title }}</h1>
+  </div>
+  <div class="header-actions">
+    <span class="status-badge status-{{ ep.production_status }} large">{{ ep.production_status }}</span>
+  </div>
+</div>
+
+<div class="two-panel">
+  <!-- LEFT: Storyline + Script -->
+  <section class="card">
+    <h3>Storyline</h3>
+    <textarea id="storyline-editor" rows="6" class="full-width">{{ ep.storyline }}</textarea>
+    <button class="btn-secondary" onclick="saveStoryline({{ ep.id }})">Save Storyline</button>
+
+    {% if script %}
+    <h3 style="margin-top:1.5rem">Script ({{ script|length }} scenes)</h3>
+    <div class="scene-list">
+      {% for scene in script %}
+      <div class="scene-card">
+        <div class="scene-header">
+          <span class="scene-num">Scene {{ scene.scene }}</span>
+          <span class="scene-chars">{{ scene.characters|join(', ') }}</span>
+          <span class="scene-dur">{{ scene.duration_seconds }}s</span>
+        </div>
+        <p class="scene-desc"><strong>Visual:</strong> {{ scene.description }}</p>
+        <p class="scene-narr"><strong>Narration:</strong> {{ scene.narration }}</p>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </section>
+
+  <!-- RIGHT: Production + Jobs -->
+  <section class="card">
+    <h3>Production</h3>
+    <div class="action-row">
+      {% if ep.production_status == 'draft' %}
+      <button class="btn-primary" onclick="approveEpisode({{ ep.id }})">Approve Episode</button>
+      {% elif ep.production_status == 'approved' %}
+      <button class="btn-primary" onclick="produceEpisode({{ ep.id }})">Start Production</button>
+      {% endif %}
+    </div>
+
+    <!-- Language Output Files -->
+    {% if youtube_urls %}
+    <h4>YouTube Links</h4>
+    <ul class="lang-list">
+      {% for lang, url in youtube_urls.items() %}
+      <li><a href="{{ url }}" target="_blank">{{ lang.upper() }} — {{ url }}</a></li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+
+    <!-- Jobs Table -->
+    <h4>Production Jobs</h4>
+    <div id="jobs-container">
+      {% if jobs %}
+      <table class="jobs-table">
+        <thead><tr><th>Type</th><th>Lang</th><th>Status</th></tr></thead>
+        <tbody>
+          {% for job in jobs %}
+          <tr class="job-row status-{{ job.status }}">
+            <td>{{ job.job_type }}</td>
+            <td>{{ job.language }}</td>
+            <td><span class="status-badge status-{{ job.status }}">{{ job.status }}</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p class="muted">No jobs yet.</p>
+      {% endif %}
+    </div>
+
+    <!-- Output Videos -->
+    <h4>Output Files</h4>
+    <div class="output-files">
+      {% for lang in ['en','hi','ta','te','kn','ml','bn'] %}
+      <div class="lang-chip" id="file-{{ lang }}">{{ lang.upper() }}</div>
+      {% endfor %}
+    </div>
+
+    <!-- Translations -->
+    {% if translations %}
+    <h4>Translations</h4>
+    <details>
+      <summary>View translated narrations</summary>
+      {% for lang, narrations in translations.items() %}
+      <div class="translation-block">
+        <strong>{{ lang.upper() }}</strong>
+        <p>{{ narrations[0][:200] if narrations else '' }}…</p>
+      </div>
+      {% endfor %}
+    </details>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const EP_ID = {{ ep.id }};
+
+async function saveStoryline(epId) {
+  const sl = document.getElementById('storyline-editor').value;
+  const fd = new FormData();
+  fd.append('storyline', sl);
+  const res = await fetch(`/episodes/${epId}/update-storyline`, {method:'POST', body:fd});
+  const data = await res.json();
+  if (data.ok) alert('Storyline saved!');
+}
+
+async function approveEpisode(epId) {
+  const res = await fetch(`/episodes/${epId}/approve`, {method:'POST'});
+  const data = await res.json();
+  if (data.ok) location.reload();
+}
+
+async function produceEpisode(epId) {
+  if (!confirm('Start full production pipeline for this episode?')) return;
+  const res = await fetch(`/episodes/${epId}/produce`, {method:'POST'});
+  const data = await res.json();
+  if (data.ok) {
+    alert('Production queued! Jobs will appear below.');
+    pollJobs();
+  }
+}
+
+function pollJobs() {
+  const interval = setInterval(async () => {
+    const res = await fetch(`/episodes/${EP_ID}/jobs`);
+    const jobs = await res.json();
+    renderJobs(jobs);
+    const allDone = jobs.every(j => j.status === 'done' || j.status === 'failed');
+    if (allDone && jobs.length > 0) {
+      clearInterval(interval);
+      setTimeout(() => location.reload(), 1000);
+    }
+  }, 5000);
+}
+
+function renderJobs(jobs) {
+  const container = document.getElementById('jobs-container');
+  if (!jobs.length) return;
+  container.innerHTML = `<table class="jobs-table">
+    <thead><tr><th>Type</th><th>Lang</th><th>Status</th></tr></thead>
+    <tbody>${jobs.map(j => `
+      <tr class="job-row">
+        <td>${j.job_type}</td>
+        <td>${j.language}</td>
+        <td><span class="status-badge status-${j.status}">${j.status}</span></td>
+      </tr>
+    `).join('')}</tbody>
+  </table>`;
+}
+
+// Auto-poll if producing
+if ('{{ ep.production_status }}' === 'producing' || '{{ ep.production_status }}' === 'queued') {
+  pollJobs();
+}
+</script>
+{% endblock %}
