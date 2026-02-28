@@ -147,7 +147,7 @@ class Job(Base):
 
     id = Column(Integer, primary_key=True)
     episode_id = Column(Integer, ForeignKey("episodes.id"), nullable=False)
-    # scene_image | animate | tts | lipsync | stitch | upload
+    # scene_image | ken_burns | tts | stitch | upload
     job_type = Column(String(32), nullable=False)
     language = Column(String(8), default="en")
     higgsfield_job_id = Column(String(256), default="")

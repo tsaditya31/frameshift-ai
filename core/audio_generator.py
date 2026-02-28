@@ -1,5 +1,4 @@
-"""Google Cloud Text-to-Speech narration generation."""
-import os
+"""ElevenLabs multilingual narration audio generation."""
 from pathlib import Path
 from typing import List, Optional
 
@@ -7,15 +6,15 @@ from config import get_settings
 
 settings = get_settings()
 
-# Language code → Google TTS voice config
-VOICE_CONFIG = {
-    "en": {"language_code": "en-US", "name": "en-US-Neural2-D", "gender": "MALE"},
-    "hi": {"language_code": "hi-IN", "name": "hi-IN-Neural2-B", "gender": "MALE"},
-    "ta": {"language_code": "ta-IN", "name": "ta-IN-Neural2-D", "gender": "MALE"},
-    "te": {"language_code": "te-IN", "name": "te-IN-Standard-B", "gender": "MALE"},
-    "kn": {"language_code": "kn-IN", "name": "kn-IN-Standard-B", "gender": "MALE"},
-    "ml": {"language_code": "ml-IN", "name": "ml-IN-Standard-B", "gender": "MALE"},
-    "bn": {"language_code": "bn-IN", "name": "bn-IN-Neural2-D", "gender": "MALE"},
+# Language code → ElevenLabs language name (eleven_multilingual_v2 supports all)
+LANG_MAP = {
+    "en": "English",
+    "hi": "Hindi",
+    "ta": "Tamil",
+    "te": "Telugu",
+    "kn": "Kannada",
+    "ml": "Malayalam",
+    "bn": "Bengali",
 }
 
 
@@ -24,43 +23,37 @@ async def generate_narration_audio(
     lang_code: str,
     output_path: Path,
 ) -> bool:
-    """Generate TTS audio for a narration text. Returns True on success."""
+    """Generate TTS audio for a narration text using ElevenLabs. Returns True on success."""
     if not text.strip():
         return False
 
-    voice = VOICE_CONFIG.get(lang_code, VOICE_CONFIG["en"])
+    if not settings.elevenlabs_api_key:
+        print("[audio_generator] No ELEVENLABS_API_KEY configured, skipping TTS")
+        return False
 
     try:
-        from google.cloud import texttospeech
+        from elevenlabs.client import ElevenLabs
 
-        client = texttospeech.TextToSpeechClient(
-            client_options={"api_key": settings.google_cloud_tts_key}
-            if settings.google_cloud_tts_key
-            else {}
-        )
+        client = ElevenLabs(api_key=settings.elevenlabs_api_key)
 
-        synthesis_input = texttospeech.SynthesisInput(text=text)
-        voice_params = texttospeech.VoiceSelectionParams(
-            language_code=voice["language_code"],
-            name=voice["name"],
-        )
-        audio_config = texttospeech.AudioConfig(
-            audio_encoding=texttospeech.AudioEncoding.MP3,
-            speaking_rate=0.95,
-        )
-
-        response = client.synthesize_speech(
-            input=synthesis_input,
-            voice=voice_params,
-            audio_config=audio_config,
+        audio = client.text_to_speech.convert(
+            voice_id=settings.elevenlabs_voice_id,
+            text=text,
+            model_id="eleven_multilingual_v2",
+            output_format="mp3_44100_128",
         )
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_bytes(response.audio_content)
+
+        # audio is a generator of bytes chunks
+        with open(output_path, "wb") as f:
+            for chunk in audio:
+                f.write(chunk)
+
         return True
 
     except Exception as e:
-        print(f"[audio_generator] TTS failed for lang={lang_code}: {e}")
+        print(f"[audio_generator] ElevenLabs TTS failed for lang={lang_code}: {e}")
         return False
 
 
