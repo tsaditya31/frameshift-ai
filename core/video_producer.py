@@ -4,6 +4,8 @@ import asyncio
 from pathlib import Path
 from typing import List, Optional
 
+import httpx
+
 from config import get_settings
 from database import async_session, Episode, Job, Character, KnowledgeChunk, Storyboard
 from sqlalchemy import select
@@ -12,6 +14,16 @@ from core.translator import translate_narrations, SUPPORTED_LANGUAGES
 from core.audio_generator import generate_episode_audio
 
 settings = get_settings()
+
+HIGGSFIELD_BASE = "https://platform.higgsfield.ai"
+
+
+def _hf_headers() -> dict:
+    return {
+        "hf-api-key": settings.higgsfield_api_key,
+        "hf-secret": settings.higgsfield_api_secret,
+        "Content-Type": "application/json",
+    }
 
 # Ken Burns effect types — cycled across scenes for visual variety
 KEN_BURNS_EFFECTS = [
@@ -146,7 +158,9 @@ async def _produce_base_video(
 async def _generate_scene_image(scene: dict, soul_map: dict, out_path: Path, ep_id: int) -> bool:
     description = scene.get("description", "")
     characters = scene.get("characters", [])
+    # Use the first character's soul ID for consistency
     soul_ids = [soul_map[c] for c in characters if c in soul_map]
+    custom_ref_id = soul_ids[0] if soul_ids else None
 
     # Create job record
     async with async_session() as db:
@@ -161,18 +175,32 @@ async def _generate_scene_image(scene: dict, soul_map: dict, out_path: Path, ep_
         job_id = job.id
 
     try:
-        from higgsfield.client import HiggsFieldClient
-        hf = HiggsFieldClient(api_key=settings.higgsfield_api_key)
+        payload = {
+            "prompt": f"Epic cinematic scene: {description}",
+            "width_and_height": "1280x720",
+            "quality": "720p",
+            "batch_size": 1,
+        }
+        if custom_ref_id:
+            payload["custom_reference_id"] = custom_ref_id
 
-        kwargs = {"prompt": f"Epic cinematic scene: {description}", "width": 1280, "height": 720}
-        if soul_ids:
-            kwargs["soul_ids"] = soul_ids
+        async with httpx.AsyncClient(timeout=30) as http:
+            resp = await http.post(
+                f"{HIGGSFIELD_BASE}/v1/text2image/soul",
+                headers=_hf_headers(),
+                json=payload,
+            )
+            resp.raise_for_status()
+            data = resp.json()
 
-        result = hf.image.generate(**kwargs)
-        img_url = result.image_url if hasattr(result, "image_url") else result.get("image_url", "")
+        job_set_id = data.get("job_set_id", "")
+        if not job_set_id:
+            raise ValueError(f"No job_set_id in response: {data}")
+
+        # Poll until image is ready
+        img_url = await _poll_job_set(job_set_id)
 
         if img_url:
-            import httpx
             async with httpx.AsyncClient(timeout=60) as c:
                 resp = await c.get(img_url)
                 out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -184,6 +212,8 @@ async def _generate_scene_image(scene: dict, soul_map: dict, out_path: Path, ep_
                 j.output_path = str(out_path)
                 await db.commit()
             return True
+        else:
+            raise ValueError("No image URL from job set polling")
 
     except Exception as e:
         print(f"[video_producer] Scene image failed: {e}")
@@ -194,6 +224,40 @@ async def _generate_scene_image(scene: dict, soul_map: dict, out_path: Path, ep_
         j.error_msg = str(e) if 'e' in dir() else "unknown"
         await db.commit()
     return False
+
+
+async def _poll_job_set(job_set_id: str, timeout: int = 120) -> Optional[str]:
+    """Poll a Higgsfield job set until completion. Returns image URL on success."""
+    elapsed = 0
+    interval = 5
+    while elapsed < timeout:
+        try:
+            async with httpx.AsyncClient(timeout=30) as http:
+                resp = await http.get(
+                    f"{HIGGSFIELD_BASE}/v1/job-sets/{job_set_id}",
+                    headers=_hf_headers(),
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                status = data.get("status", "")
+                if status == "completed":
+                    jobs = data.get("jobs", [])
+                    if jobs:
+                        outputs = jobs[0].get("outputs", [])
+                        if outputs:
+                            return outputs[0].get("url", "")
+                    return None
+                if status in ("failed", "error"):
+                    print(f"[video_producer] Job {job_set_id} failed: {data}")
+                    return None
+        except Exception as e:
+            print(f"[video_producer] Poll error: {e}")
+
+        await asyncio.sleep(interval)
+        elapsed += interval
+
+    print(f"[video_producer] Job {job_set_id} timed out")
+    return None
 
 
 async def _ken_burns_animate(

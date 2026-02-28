@@ -5,6 +5,7 @@ from functools import lru_cache
 class Settings(BaseSettings):
     anthropic_api_key: str = ""
     higgsfield_api_key: str = ""
+    higgsfield_api_secret: str = ""
     elevenlabs_api_key: str = ""
     elevenlabs_voice_id: str = "pNInz6obpgDQGcFmaJgB"
     youtube_client_id: str = ""
