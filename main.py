@@ -372,6 +372,21 @@ async def parse_episodes_from_chat(
             except json.JSONDecodeError:
                 pass
 
+    # Fall back: extract individual episode JSON objects (handles truncated responses)
+    if not episodes:
+        ep_objects = re.findall(
+            r'\{\s*"(?:episode|title)"[^{}]*"title"\s*:\s*"([^"]+)"[^{}]*"storyline"\s*:\s*"([^"]+)"[^{}]*\}',
+            content,
+        )
+        if not ep_objects:
+            # Try reversed key order (title before storyline before episode)
+            ep_objects = re.findall(
+                r'\{\s*[^{}]*"title"\s*:\s*"([^"]+)"[^{}]*"storyline"\s*:\s*"([^"]+)"[^{}]*\}',
+                content,
+            )
+        for title, storyline in ep_objects:
+            episodes.append({"title": title.strip(), "storyline": storyline.strip()})
+
     if not episodes:
         pattern = r"(?:^|\n)\s*(\d+)\.\s*\*{0,2}(.+?)\*{0,2}\s*[-:–]\s*(.+?)(?=\n\s*\d+\.|\n*$)"
         matches = re.findall(pattern, content, re.DOTALL)

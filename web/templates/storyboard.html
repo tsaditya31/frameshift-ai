@@ -218,7 +218,7 @@ async function addToStoryboard(text) {
   let summary = [];
 
   // Try parsing episodes
-  const hasEpisodes = /"episodes"\s*:\s*\[/.test(text) || /"title"/.test(text) || /\d+\.\s*.+[-:–]/.test(text);
+  const hasEpisodes = /"episodes"\s*:\s*\[/.test(text) || /"episode"/.test(text) || /"title"/.test(text) || /\d+\.\s*.+[-:–]/.test(text);
   if (hasEpisodes) {
     const fd = new FormData();
     fd.append('content', text);
