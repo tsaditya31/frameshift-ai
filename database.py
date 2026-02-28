@@ -1,3 +1,5 @@
+import logging
+import os
 from datetime import datetime
 from typing import Optional
 from sqlalchemy import (
@@ -9,16 +11,23 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sess
 
 from config import get_settings
 
+logger = logging.getLogger(__name__)
 settings = get_settings()
 
 
 def _get_db_url() -> str:
-    url = settings.database_public_url or settings.database_url
+    # Check Railway's variable names: DATABASE_PUBLIC_URL, DATABASE_URL, or PGHOST-style
+    url = (
+        os.environ.get("DATABASE_PUBLIC_URL")
+        or os.environ.get("DATABASE_URL")
+        or settings.database_url
+    )
     # Railway provides postgres:// but SQLAlchemy needs postgresql+asyncpg://
     if url.startswith("postgres://"):
         url = url.replace("postgres://", "postgresql+asyncpg://", 1)
-    elif url.startswith("postgresql://"):
+    elif url.startswith("postgresql://") and "+asyncpg" not in url:
         url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    logger.info(f"Database URL scheme: {url.split('@')[0].split('://')[0] if '://' in url else 'unknown'}")
     return url
 
 
@@ -165,8 +174,10 @@ class UploadSchedule(Base):
 
 
 async def init_db():
+    logger.info(f"init_db: creating tables with engine {engine.url.get_backend_name()}")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    logger.info("init_db: tables created successfully")
 
 
 async def get_db():
