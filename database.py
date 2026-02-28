@@ -19,6 +19,21 @@ class Base(DeclarativeBase):
     pass
 
 
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True)
+    email = Column(String(256), unique=True, nullable=False)
+    password_hash = Column(String(256), nullable=True)
+    google_id = Column(String(256), unique=True, nullable=True)
+    name = Column(String(256), default="")
+    reset_token = Column(String(128), nullable=True)
+    reset_token_expires = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    storyboards = relationship("Storyboard", back_populates="user")
+
+
 class Storyboard(Base):
     __tablename__ = "storyboards"
 
@@ -29,7 +44,9 @@ class Storyboard(Base):
     # draft | generating | ready | in_production | complete
     status = Column(String(32), default="draft")
     created_at = Column(DateTime, default=datetime.utcnow)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
 
+    user = relationship("User", back_populates="storyboards")
     episodes = relationship("Episode", back_populates="storyboard", cascade="all, delete-orphan")
     characters = relationship("Character", back_populates="storyboard", cascade="all, delete-orphan")
     knowledge_chunks = relationship("KnowledgeChunk", back_populates="storyboard", cascade="all, delete-orphan")
@@ -55,6 +72,7 @@ class Episode(Base):
 
     storyboard = relationship("Storyboard", back_populates="episodes")
     jobs = relationship("Job", back_populates="episode", cascade="all, delete-orphan")
+    chat_messages = relationship("ChatMessage", back_populates="episode", cascade="all, delete-orphan")
 
 
 class Character(Base):
@@ -69,6 +87,8 @@ class Character(Base):
     # needs_images | ready_to_train | training | trained | failed
     training_status = Column(String(32), default="needs_images")
     hero_image_path = Column(String(512), default="")
+    profile_prompt = Column(Text, default="")
+    locked = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     storyboard = relationship("Storyboard", back_populates="characters")
@@ -93,11 +113,13 @@ class ChatMessage(Base):
 
     id = Column(Integer, primary_key=True)
     storyboard_id = Column(Integer, ForeignKey("storyboards.id"), nullable=False)
+    episode_id = Column(Integer, ForeignKey("episodes.id"), nullable=True)
     role = Column(String(16), nullable=False)   # user | assistant
     content = Column(Text, default="")
     created_at = Column(DateTime, default=datetime.utcnow)
 
     storyboard = relationship("Storyboard", back_populates="chat_messages")
+    episode = relationship("Episode", back_populates="chat_messages")
 
 
 class Job(Base):
@@ -134,6 +156,15 @@ class UploadSchedule(Base):
 async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # Migration: add user_id column to existing storyboards table
+        try:
+            await conn.execute(
+                __import__("sqlalchemy").text(
+                    "ALTER TABLE storyboards ADD COLUMN user_id INTEGER REFERENCES users(id)"
+                )
+            )
+        except Exception:
+            pass  # Column already exists
 
 
 async def get_db():

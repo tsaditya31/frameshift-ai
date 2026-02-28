@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Ep {{ ep.episode_num }}: {{ ep.title }} — Clawd Bot{% endblock %}
+{% block title %}Ep {{ ep.episode_num }}: {{ ep.title }} — Frameshift AI{% endblock %}
 
 {% block content %}
 <div class="page-header">
@@ -12,7 +12,7 @@
   </div>
 </div>
 
-<div class="two-panel">
+<div class="three-panel">
   <!-- LEFT: Storyline + Script -->
   <section class="card">
     <h3>Storyline</h3>
@@ -35,6 +35,26 @@
       {% endfor %}
     </div>
     {% endif %}
+  </section>
+
+  <!-- MIDDLE: Episode Chat -->
+  <section class="card chat-panel" style="height:600px">
+    <h3>Episode Chat</h3>
+    <div id="chat-messages" class="chat-messages">
+      {% for msg in messages %}
+      <div class="chat-msg {{ msg.role }}">
+        <div class="msg-bubble">{{ msg.content }}</div>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="chat-quick-actions">
+      <button class="chip" onclick="sendQuick('Refine the storyline for this episode')">Refine Storyline</button>
+      <button class="chip" onclick="sendQuick('Generate a detailed scene-by-scene script for this episode')">Generate Script</button>
+    </div>
+    <form id="chat-form" class="chat-input-form">
+      <textarea id="chat-input" placeholder="Ask Claude about this episode..." rows="2"></textarea>
+      <button type="submit" class="btn-primary">Send</button>
+    </form>
   </section>
 
   <!-- RIGHT: Production + Jobs -->
@@ -164,6 +184,52 @@ function renderJobs(jobs) {
 // Auto-poll if producing
 if ('{{ ep.production_status }}' === 'producing' || '{{ ep.production_status }}' === 'queued') {
   pollJobs();
+}
+
+// ─── Episode Chat SSE ───
+function sendQuick(msg) {
+  document.getElementById('chat-input').value = msg;
+  document.getElementById('chat-form').dispatchEvent(new Event('submit'));
+}
+
+document.getElementById('chat-form').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const input = document.getElementById('chat-input');
+  const msg = input.value.trim();
+  if (!msg) return;
+  input.value = '';
+
+  appendChatMsg('user', msg);
+  const assistantDiv = appendChatMsg('assistant', '');
+  const bubble = assistantDiv.querySelector('.msg-bubble');
+
+  const es = new EventSource(`/episodes/${EP_ID}/chat/stream?message=${encodeURIComponent(msg)}`);
+  es.onmessage = function(event) {
+    const data = JSON.parse(event.data);
+    if (data.token) {
+      bubble.textContent += data.token;
+      scrollChatToBottom();
+    }
+    if (data.done) {
+      es.close();
+    }
+  };
+  es.onerror = function() { es.close(); };
+});
+
+function appendChatMsg(role, content) {
+  const container = document.getElementById('chat-messages');
+  const div = document.createElement('div');
+  div.className = `chat-msg ${role}`;
+  div.innerHTML = `<div class="msg-bubble">${content}</div>`;
+  container.appendChild(div);
+  scrollChatToBottom();
+  return div;
+}
+
+function scrollChatToBottom() {
+  const c = document.getElementById('chat-messages');
+  c.scrollTop = c.scrollHeight;
 }
 </script>
 {% endblock %}

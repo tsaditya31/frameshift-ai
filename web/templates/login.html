@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Frameshift — Sign In</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:       #0f1117;
+    --panel:    #181c27;
+    --surface:  #1e2334;
+    --border:   #2a3048;
+    --text:     #e8eaf2;
+    --muted:    #6b7394;
+    --accent:   #7c6ef7;
+    --accent-hover: #9080ff;
+    --accent-dim: rgba(124,110,247,0.15);
+    --success:  #22c55e;
+    --danger:   #ef4444;
+  }
+
+  body {
+    min-height: 100vh;
+    display: flex;
+    background: var(--bg);
+    font-family: 'DM Sans', sans-serif;
+    color: var(--text);
+  }
+
+  .left-panel {
+    width: 45%;
+    background: var(--panel);
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: flex-end;
+    padding: 3rem;
+    border-right: 1px solid var(--border);
+  }
+
+  .left-panel::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(ellipse at 25% 65%, rgba(124,110,247,0.2) 0%, transparent 55%),
+      radial-gradient(ellipse at 75% 20%, rgba(124,110,247,0.08) 0%, transparent 50%);
+  }
+
+  .left-grid {
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  .left-content {
+    position: relative;
+    z-index: 1;
+  }
+
+  .right-panel {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem;
+    background: var(--bg);
+  }
+
+  .card {
+    width: 100%;
+    max-width: 380px;
+    animation: fadeUp 0.6s ease both;
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .logo {
+    font-family: 'DM Sans', sans-serif;
+    margin-bottom: 2.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+  }
+
+  .logo-mark {
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+  }
+
+  .logo-name {
+    display: flex;
+    flex-direction: column;
+    line-height: 1;
+  }
+
+  .logo-name .brand {
+    font-size: 1.1rem;
+    font-weight: 500;
+    color: var(--text);
+    letter-spacing: -0.02em;
+  }
+
+  .logo-name .tagbadge {
+    font-size: 0.6rem;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-top: 2px;
+  }
+
+  h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: 2rem;
+    font-weight: 400;
+    color: var(--text);
+    margin-bottom: 0.5rem;
+    letter-spacing: -0.02em;
+  }
+
+  .subtitle {
+    font-size: 0.875rem;
+    color: var(--muted);
+    margin-bottom: 2.5rem;
+    font-weight: 300;
+  }
+
+  .field {
+    margin-bottom: 1.25rem;
+  }
+
+  .field label {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 0.5rem;
+  }
+
+  .field input {
+    width: 100%;
+    padding: 0.875rem 1rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.9375rem;
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    font-weight: 300;
+  }
+
+  .field input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(124,110,247,0.18);
+  }
+
+  .field input::placeholder { color: var(--muted); opacity: 0.6; }
+
+  .row {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    margin-bottom: 1.75rem;
+    margin-top: 0.25rem;
+  }
+
+  .forgot {
+    font-size: 0.8125rem;
+    color: var(--accent);
+    text-decoration: none;
+    font-weight: 400;
+  }
+
+  .forgot:hover { color: var(--accent-hover); text-decoration: underline; }
+
+  .btn {
+    width: 100%;
+    padding: 0.9375rem;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.9375rem;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+    margin-bottom: 1.25rem;
+  }
+
+  .btn:hover { background: var(--accent-hover); }
+  .btn:active { transform: scale(0.99); }
+
+  .divider {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .divider::before, .divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  .divider span {
+    font-size: 0.75rem;
+    color: var(--muted);
+    font-weight: 300;
+  }
+
+  .btn-outline {
+    width: 100%;
+    padding: 0.875rem;
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 400;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.625rem;
+    text-decoration: none;
+  }
+
+  .btn-outline:hover { border-color: var(--accent); background: var(--accent-dim); color: var(--text); }
+
+  .g-icon { width: 18px; height: 18px; }
+
+  .signup-row {
+    text-align: center;
+    margin-top: 1.75rem;
+    font-size: 0.8125rem;
+    color: var(--muted);
+    font-weight: 300;
+  }
+
+  .signup-row a {
+    color: var(--accent);
+    font-weight: 500;
+    text-decoration: none;
+  }
+
+  .signup-row a:hover { color: var(--accent-hover); text-decoration: underline; }
+
+  .alert {
+    padding: 0.75rem 1rem;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    margin-bottom: 1.25rem;
+    border: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  .alert-error { border-color: var(--danger); color: var(--danger); background: rgba(239,68,68,0.08); }
+  .alert-success { border-color: var(--success); color: var(--success); background: rgba(34,197,94,0.08); }
+
+  @media (max-width: 680px) {
+    .left-panel { display: none; }
+    body { background: var(--bg); }
+  }
+</style>
+</head>
+<body>
+
+<div class="left-panel">
+  <div class="left-grid"></div>
+
+  <!-- Decorative storyboard frames -->
+  <div style="position:absolute;top:2.5rem;left:2.5rem;right:2.5rem;display:grid;grid-template-columns:1fr 1fr;gap:12px;opacity:0.25;">
+    <div style="background:rgba(124,110,247,0.12);border:1px solid rgba(124,110,247,0.25);border-radius:6px;aspect-ratio:16/9;"></div>
+    <div style="background:rgba(124,110,247,0.25);border:1px solid rgba(124,110,247,0.5);border-radius:6px;aspect-ratio:16/9;"></div>
+    <div style="background:rgba(124,110,247,0.08);border:1px solid rgba(124,110,247,0.15);border-radius:6px;aspect-ratio:16/9;"></div>
+    <div style="background:rgba(124,110,247,0.18);border:1px solid rgba(124,110,247,0.3);border-radius:6px;aspect-ratio:16/9;"></div>
+  </div>
+
+  <!-- Frame numbers -->
+  <div style="position:absolute;top:3rem;left:3rem;font-size:0.6rem;font-family:'DM Sans',sans-serif;letter-spacing:0.1em;color:rgba(124,110,247,0.4);font-weight:500;">01</div>
+  <div style="position:absolute;top:3rem;left:calc(2.5rem + 50% + 6px);font-size:0.6rem;font-family:'DM Sans',sans-serif;letter-spacing:0.1em;color:rgba(124,110,247,0.6);font-weight:500;">02</div>
+
+  <!-- Center branding -->
+  <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;z-index:2;">
+    <svg width="56" height="56" viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin:0 auto 1rem;">
+      <rect x="4" y="10" width="22" height="15" rx="2" fill="rgba(124,110,247,0.1)" stroke="rgba(124,110,247,0.35)" stroke-width="1.5"/>
+      <rect x="30" y="10" width="22" height="15" rx="2" fill="rgba(124,110,247,0.3)" stroke="rgba(124,110,247,0.7)" stroke-width="1.5"/>
+      <rect x="4" y="31" width="22" height="15" rx="2" fill="rgba(124,110,247,0.15)" stroke="rgba(124,110,247,0.4)" stroke-width="1.5"/>
+      <rect x="30" y="31" width="22" height="15" rx="2" fill="rgba(124,110,247,0.08)" stroke="rgba(124,110,247,0.25)" stroke-width="1.5"/>
+      <circle cx="28" cy="28" r="4" fill="rgba(124,110,247,0.95)"/>
+      <path d="M28 22 L28.8 26.8 L33 28 L28.8 29.2 L28 34 L27.2 29.2 L23 28 L27.2 26.8 Z" fill="white" opacity="0.95"/>
+    </svg>
+    <div style="font-family:'Playfair Display',serif;font-size:2.2rem;font-weight:400;color:rgba(232,234,242,0.95);letter-spacing:-0.02em;line-height:1.2;margin-bottom:0.5rem;">Frame<em>shift</em></div>
+    <div style="font-size:0.75rem;letter-spacing:0.15em;text-transform:uppercase;color:rgba(124,110,247,0.7);font-family:'DM Sans',sans-serif;font-weight:400;">AI Storyboard Studio</div>
+  </div>
+
+  <div class="left-content">
+    <div style="font-size:0.875rem;font-family:'DM Sans',sans-serif;font-weight:300;letter-spacing:0.04em;color:rgba(232,234,242,0.3);">From idea to visual narrative — instantly.</div>
+  </div>
+</div>
+
+<div class="right-panel">
+  <div class="card">
+    <div class="logo">
+      <svg class="logo-mark" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="2" y="5" width="12" height="9" rx="1.5" fill="rgba(124,110,247,0.12)" stroke="rgba(124,110,247,0.4)" stroke-width="1"/>
+        <rect x="18" y="5" width="12" height="9" rx="1.5" fill="rgba(124,110,247,0.3)" stroke="rgba(124,110,247,0.7)" stroke-width="1"/>
+        <rect x="2" y="18" width="12" height="9" rx="1.5" fill="rgba(124,110,247,0.18)" stroke="rgba(124,110,247,0.5)" stroke-width="1"/>
+        <rect x="18" y="18" width="12" height="9" rx="1.5" fill="rgba(124,110,247,0.08)" stroke="rgba(124,110,247,0.3)" stroke-width="1"/>
+        <circle cx="16" cy="16" r="3" fill="#7c6ef7"/>
+        <path d="M16 12.5L16.6 15.4L19.5 16L16.6 16.6L16 19.5L15.4 16.6L12.5 16L15.4 15.4Z" fill="white"/>
+      </svg>
+      <div class="logo-name">
+        <span class="brand">Frameshift</span>
+        <span class="tagbadge">AI Studio</span>
+      </div>
+    </div>
+
+    <h1>Sign in</h1>
+    <p class="subtitle">Welcome back. Your boards are waiting.</p>
+
+    {% if error %}
+    <div class="alert alert-error">{{ error }}</div>
+    {% endif %}
+
+    {% set reset = request.query_params.get("reset") %}
+    {% if reset %}
+    <div class="alert alert-success">Password reset successfully. Sign in with your new password.</div>
+    {% endif %}
+
+    <form method="post" action="/login">
+      <div class="field">
+        <label for="email">Email</label>
+        <input id="email" type="email" name="email" placeholder="you@example.com" required autofocus />
+      </div>
+
+      <div class="field">
+        <label for="password">Password</label>
+        <input id="password" type="password" name="password" placeholder="&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;" required />
+      </div>
+
+      <div class="row">
+        <a href="/forgot-password" class="forgot">Forgot password?</a>
+      </div>
+
+      <button type="submit" class="btn">Sign in</button>
+    </form>
+
+    {% if google_enabled %}
+    <div class="divider"><span>or</span></div>
+
+    <a href="/auth/google" class="btn-outline">
+      <svg class="g-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+        <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+        <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
+        <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+      </svg>
+      Continue with Google
+    </a>
+    {% endif %}
+
+    <div class="signup-row">
+      Don't have an account? <a href="/register">Create one</a>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

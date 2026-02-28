@@ -6,7 +6,7 @@ from typing import AsyncIterator, List
 import anthropic
 
 from config import get_settings
-from database import Storyboard, ChatMessage, KnowledgeChunk
+from database import Storyboard, Episode, ChatMessage, KnowledgeChunk
 
 settings = get_settings()
 client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
@@ -25,14 +25,19 @@ def _build_system(sb: Storyboard, kb_chunks: List[KnowledgeChunk]) -> str:
 Description: {sb.description}
 
 You help plan multi-episode video series based on the provided knowledge base.
-When asked to generate episode outlines, respond with a JSON array in this exact format:
-[
-  {{"episode": 1, "title": "Episode Title", "storyline": "One paragraph summary..."}},
-  ...
-]
+When asked to generate episode outlines, respond with a JSON object in this exact format:
+{{
+  "episodes": [
+    {{"episode": 1, "title": "Episode Title", "storyline": "One paragraph summary..."}},
+    ...
+  ],
+  "characters": [
+    {{"name": "Character Name", "description": "Brief character description..."}},
+    ...
+  ]
+}}
 
-When asked to update a specific episode, respond with just that episode's JSON object.
-For regular conversation, respond naturally.
+Include all main characters identified from the storylines. For regular conversation, respond naturally.
 
 Knowledge Base:
 {_kb_context(kb_chunks)}
@@ -95,6 +100,44 @@ async def generate_episode_outlines(
         {"episode": i, "title": f"Episode {i}", "storyline": ""}
         for i in range(1, num_episodes + 1)
     ]
+
+
+async def stream_episode_chat(
+    sb: Storyboard,
+    episode: Episode,
+    history: List[ChatMessage],
+    kb_chunks: List[KnowledgeChunk],
+    user_message: str,
+) -> AsyncIterator[str]:
+    """Stream chat for a specific episode, with episode context in the system prompt."""
+    kb_text = _kb_context(kb_chunks)
+    system = f"""You are a creative story writing assistant for the project: "{sb.title}".
+Description: {sb.description}
+
+You are working on Episode {episode.episode_num}: "{episode.title}".
+Current storyline: {episode.storyline or '(not yet defined)'}
+Current script: {episode.script_json or '(not yet generated)'}
+
+Help refine the storyline, generate or improve the scene-by-scene script, and answer questions about this episode.
+When generating a script, return a JSON array of scenes with keys: scene, description, narration, characters, duration_seconds.
+
+Knowledge Base:
+{kb_text}
+"""
+
+    messages = []
+    for msg in history[:-1]:
+        messages.append({"role": msg.role, "content": msg.content})
+    messages.append({"role": "user", "content": user_message})
+
+    async with client.messages.stream(
+        model=settings.model,
+        max_tokens=4096,
+        system=system,
+        messages=messages,
+    ) as stream:
+        async for text in stream.text_stream:
+            yield text
 
 
 async def generate_scene_script(

@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Edit {{ sb.title }} — Frameshift AI{% endblock %}
+
+{% block content %}
+<div class="sb-page">
+  <div class="page-header">
+    <div>
+      <a class="breadcrumb" href="/storyboards/{{ sb.id }}">&larr; Back to {{ sb.title }}</a>
+      <h1>Edit Storyboard</h1>
+    </div>
+  </div>
+
+  {% if episodes %}
+  <div class="editor-grid">
+    {% for ep in episodes %}
+    <a href="/episodes/{{ ep.id }}" class="editor-card">
+      <div class="editor-card-header">
+        <span class="ep-num">Episode {{ ep.episode_num }}</span>
+        <span class="status-badge status-{{ ep.production_status }}">{{ ep.production_status }}</span>
+      </div>
+      <h3 class="editor-card-title">{{ ep.title or "Untitled" }}</h3>
+      <p class="editor-card-storyline">{{ ep.storyline[:150] }}{% if ep.storyline|length > 150 %}...{% endif %}</p>
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <p>No episodes yet. Go back and generate some using the chat.</p>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

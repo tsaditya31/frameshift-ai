@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+{% block title %}{{ char.name }} — {{ sb.title }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <a href="/storyboards/{{ sb.id }}/characters" class="breadcrumb">&larr; {{ sb.title }} Characters</a>
+    <h1>{{ char.name }}</h1>
+  </div>
+  <div class="header-actions">
+    <div class="char-nav">
+      {% if prev_id %}
+      <a href="/characters/{{ prev_id }}" class="btn-secondary">&larr; Prev</a>
+      {% endif %}
+      <span class="char-nav-count">Character {{ current_num }} of {{ total_chars }}</span>
+      {% if next_id %}
+      <a href="/characters/{{ next_id }}" class="btn-secondary">Next &rarr;</a>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+{% if char.locked %}
+<div class="locked-banner">
+  Locked &mdash; Soul ID trained. Fields are read-only.
+  <button class="btn-secondary" onclick="unlockCharacter({{ char.id }})">Unlock (requires re-training)</button>
+</div>
+{% endif %}
+
+<div class="two-panel">
+  <!-- LEFT: Images -->
+  <section class="card">
+    <h3>Images</h3>
+
+    <!-- Hero Image -->
+    <div class="char-hero-large">
+      {% if char.hero_image_path %}
+      <img src="/output/{{ sb.id }}/characters/{{ char.hero_image_path.split('/')[-1] }}" alt="{{ char.name }}" />
+      {% else %}
+      <div class="char-placeholder-large">{{ char.name[0] }}</div>
+      {% endif %}
+    </div>
+
+    <!-- Reference Image Gallery -->
+    {% if ref_images %}
+    <h4 style="margin-top:1rem">Reference Images ({{ ref_images|length }})</h4>
+    <div class="ref-gallery">
+      {% for img in ref_images %}
+      <div class="ref-thumb">
+        <img src="/knowledge/{{ sb.id }}/character_refs/{{ char.name|lower|replace(' ', '_') }}/{{ img }}" alt="{{ img }}" />
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if not char.locked %}
+    <div style="margin-top:1rem">
+      <label class="btn-secondary btn-upload">
+        Upload Reference Images
+        <input type="file" multiple accept="image/*" style="display:none"
+               onchange="uploadRefs({{ char.id }}, this.files)" />
+      </label>
+    </div>
+    {% endif %}
+
+    <div class="char-actions" style="margin-top:1rem">
+      <span class="status-badge status-{{ char.training_status }}">{{ char.training_status.replace('_', ' ') }}</span>
+      {% if char.training_status == 'ready_to_train' and not char.locked %}
+      <button class="btn-primary" onclick="trainChar({{ char.id }})">Train Soul ID</button>
+      {% elif char.training_status == 'training' %}
+      <div class="progress-bar" style="flex:1"><div class="progress-fill" style="width:60%"></div></div>
+      {% elif char.training_status == 'trained' %}
+      <button class="btn-secondary" onclick="genHeroImage({{ char.id }})">Generate Hero Image</button>
+      {% endif %}
+    </div>
+  </section>
+
+  <!-- RIGHT: Profile -->
+  <section class="card">
+    <h3>Profile</h3>
+    <form id="profile-form" onsubmit="saveProfile(event)">
+      <label>Name
+        <input type="text" name="name" value="{{ char.name }}" {% if char.locked %}disabled{% endif %} />
+      </label>
+      <label>Description
+        <textarea name="description" rows="4" {% if char.locked %}disabled{% endif %}>{{ char.description }}</textarea>
+      </label>
+      <label>Profile Prompt
+        <textarea name="profile_prompt" rows="10" {% if char.locked %}disabled{% endif %}
+          placeholder="## Backstory&#10;...&#10;&#10;## Personality&#10;...&#10;&#10;## Appearance&#10;..."
+        >{{ char.profile_prompt }}</textarea>
+      </label>
+      {% if not char.locked %}
+      <button type="submit" class="btn-primary">Save Profile</button>
+      {% endif %}
+      <span id="save-status" class="status-msg"></span>
+    </form>
+
+    {% if char.higgsfield_soul_id %}
+    <div style="margin-top:1rem">
+      <p class="soul-id">Soul ID: <code>{{ char.higgsfield_soul_id }}</code></p>
+    </div>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const CHAR_ID = {{ char.id }};
+const SB_ID = {{ sb.id }};
+
+async function saveProfile(e) {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const res = await fetch(`/characters/${CHAR_ID}/update-profile`, {method:'POST', body:fd});
+  const data = await res.json();
+  const status = document.getElementById('save-status');
+  if (data.ok) {
+    status.textContent = 'Saved!';
+    status.style.color = 'var(--success)';
+  } else {
+    status.textContent = data.error || 'Error saving';
+    status.style.color = 'var(--danger)';
+  }
+  setTimeout(() => status.textContent = '', 3000);
+}
+
+async function uploadRefs(charId, files) {
+  const fd = new FormData();
+  for (const f of files) fd.append('images', f);
+  const res = await fetch(`/characters/${charId}/upload-refs`, {method:'POST', body:fd});
+  const data = await res.json();
+  if (data.ok) location.reload();
+}
+
+async function trainChar(charId) {
+  const res = await fetch(`/characters/${charId}/train`, {method:'POST'});
+  const data = await res.json();
+  if (data.ok) {
+    alert('Training started! This takes ~5 minutes.');
+    pollCharStatus(charId);
+  }
+}
+
+async function genHeroImage(charId) {
+  const res = await fetch(`/characters/${charId}/hero-image`, {method:'POST'});
+  const data = await res.json();
+  if (data.ok) {
+    alert('Generating hero image...');
+    pollCharStatus(charId);
+  }
+}
+
+async function unlockCharacter(charId) {
+  if (!confirm('Unlocking will reset training status. You will need to re-train the Soul ID. Continue?')) return;
+  const res = await fetch(`/characters/${charId}/unlock`, {method:'POST'});
+  const data = await res.json();
+  if (data.ok) location.reload();
+}
+
+function pollCharStatus(charId) {
+  const interval = setInterval(async () => {
+    const res = await fetch(`/characters/${charId}/status`);
+    const data = await res.json();
+    if (data.training_status === 'trained' || data.training_status === 'failed') {
+      clearInterval(interval);
+      location.reload();
+    }
+  }, 10000);
+}
+</script>
+{% endblock %}

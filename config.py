@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     youtube_client_id: str = ""
     youtube_client_secret: str = ""
 
-    database_url: str = "sqlite+aiosqlite:///./clawd.db"
+    database_url: str = "sqlite+aiosqlite:///./frameshift.db"
     host: str = "0.0.0.0"
     port: int = 8000
 
@@ -18,6 +18,21 @@ class Settings(BaseSettings):
     output_dir: str = "output"
 
     model: str = "claude-sonnet-4-6"
+
+    # Auth
+    secret_key: str = "change-me-in-production"
+
+    # Google OAuth
+    google_oauth_client_id: str = ""
+    google_oauth_client_secret: str = ""
+    google_oauth_redirect_uri: str = "http://localhost:8000/auth/google/callback"
+
+    # SMTP
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from: str = "noreply@frameshift.ai"
 
     class Config:
         env_file = ".env"

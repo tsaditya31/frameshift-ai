@@ -73,6 +73,7 @@ async def start_soul_training(char_id: int):
                 c = await sess.get(Character, char_id)
                 c.higgsfield_soul_id = soul_id
                 c.training_status = "trained"
+                c.locked = 1
                 await sess.commit()
 
         except Exception as e:

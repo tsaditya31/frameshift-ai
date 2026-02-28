@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{{ sb.title }} — Clawd Bot{% endblock %}
+{% block title %}{{ sb.title }} — Frameshift AI{% endblock %}
 
 {% block content %}
 <div class="sb-page">
@@ -28,6 +28,7 @@
       <button type="button" class="btn-primary" onclick="uploadKnowledge({{ sb.id }})">Upload & Ingest</button>
       <span id="kb-status" class="status-msg"></span>
     </form>
+    <div id="kb-file-list" class="kb-file-list"></div>
   </section>
 
   <div class="two-panel">
@@ -42,12 +43,10 @@
         {% endfor %}
       </div>
       <div class="chat-quick-actions">
-        <button class="chip" onclick="sendQuick('Generate 24 episode outlines for {{ sb.title }}')">
-          Generate 24 Episodes
-        </button>
-        <button class="chip" onclick="sendQuick('Identify the main characters from the knowledge base')">
-          Extract Characters
-        </button>
+        <div class="chip-group">
+          <input type="number" id="episode-count" value="24" min="1" max="100" />
+          <button class="chip" onclick="generateFromChat()">Generate Episodes</button>
+        </div>
       </div>
       <form id="chat-form" class="chat-input-form">
         <textarea id="chat-input" placeholder="Ask Claude to plan your story..." rows="2"></textarea>
@@ -55,26 +54,39 @@
       </form>
     </section>
 
-    <!-- RIGHT: Episodes -->
+    <!-- RIGHT: Tabbed Panel (Episodes + Characters) -->
     <section class="panel episode-panel card">
       <div class="panel-header">
-        <h3>Episodes <span class="count">({{ episodes|length }})</span></h3>
-        <div>
-          <button class="btn-secondary" onclick="generateOutlines({{ sb.id }})">Generate Outlines</button>
-          <button class="btn-secondary" onclick="extractCharacters({{ sb.id }})">Extract Characters</button>
+        <div class="tab-bar">
+          <button class="tab active" data-tab="episodes" onclick="switchTab('episodes')">
+            Episodes <span class="count" id="ep-count">({{ episodes|length }})</span>
+          </button>
+          <button class="tab" data-tab="characters" onclick="switchTab('characters')">
+            Characters <span class="count" id="char-count">(0)</span>
+          </button>
+        </div>
+        <a class="btn-secondary" href="/storyboards/{{ sb.id }}/editor">Edit Storyboard</a>
+      </div>
+
+      <!-- Episodes Tab -->
+      <div id="tab-episodes" class="tab-content active">
+        <div id="episode-list" class="episode-list">
+          {% for ep in episodes %}
+          <div class="ep-item" id="ep-{{ ep.id }}">
+            <div class="ep-header">
+              <span class="ep-num">Ep {{ ep.episode_num }}</span>
+              <a href="/episodes/{{ ep.id }}" class="ep-title">{{ ep.title or "Untitled" }}</a>
+              <span class="status-badge status-{{ ep.production_status }}">{{ ep.production_status }}</span>
+            </div>
+            <p class="ep-storyline">{{ ep.storyline[:200] }}{% if ep.storyline|length > 200 %}...{% endif %}</p>
+          </div>
+          {% endfor %}
         </div>
       </div>
-      <div id="episode-list" class="episode-list">
-        {% for ep in episodes %}
-        <div class="ep-item" id="ep-{{ ep.id }}">
-          <div class="ep-header">
-            <span class="ep-num">Ep {{ ep.episode_num }}</span>
-            <a href="/episodes/{{ ep.id }}" class="ep-title">{{ ep.title or "Untitled" }}</a>
-            <span class="status-badge status-{{ ep.production_status }}">{{ ep.production_status }}</span>
-          </div>
-          <p class="ep-storyline">{{ ep.storyline[:200] }}{% if ep.storyline|length > 200 %}…{% endif %}</p>
-        </div>
-        {% endfor %}
+
+      <!-- Characters Tab -->
+      <div id="tab-characters" class="tab-content">
+        <div id="characters-list" class="episode-list"></div>
       </div>
     </section>
   </div>
@@ -104,37 +116,62 @@
 {% block scripts %}
 <script>
 const SB_ID = {{ sb.id }};
+const SB_TITLE = {{ sb.title | tojson }};
 
+// ─── Knowledge Base ──────────────────────────────────────────────
 async function uploadKnowledge(sbId) {
   const files = document.getElementById('kb-files').files;
   const urls = document.getElementById('kb-urls').value;
   const fd = new FormData();
   for (const f of files) fd.append('files', f);
   fd.append('urls', urls);
-  document.getElementById('kb-status').textContent = 'Ingesting…';
+  document.getElementById('kb-status').textContent = 'Ingesting...';
   const res = await fetch(`/storyboards/${sbId}/upload-knowledge`, {method:'POST', body:fd});
   const data = await res.json();
-  document.getElementById('kb-status').textContent = `✓ Added ${data.added_chunks} chunks`;
+  document.getElementById('kb-status').textContent = `Added ${data.added_chunks} chunks`;
+  loadKBFiles();
 }
 
-async function generateOutlines(sbId) {
-  const n = prompt('How many episodes?', '24');
-  if (!n) return;
-  const fd = new FormData();
-  fd.append('num_episodes', n);
-  const res = await fetch(`/storyboards/${sbId}/generate-outlines`, {method:'POST', body:fd});
-  const data = await res.json();
-  if (data.episodes) {
-    renderEpisodes(data.episodes);
+async function loadKBFiles() {
+  const res = await fetch(`/storyboards/${SB_ID}/knowledge-files`);
+  const files = await res.json();
+  const container = document.getElementById('kb-file-list');
+  if (!files.length) {
+    container.innerHTML = '<p class="muted">No files ingested yet.</p>';
+    return;
   }
+  container.innerHTML = files.map(f => `
+    <div class="kb-file-item">
+      <span class="kb-file-name">${f.source_file}</span>
+      <span class="status-badge status-${f.chunk_type}">${f.chunk_type}</span>
+      <span class="kb-chunk-count">${f.chunks} chunks</span>
+      <button class="kb-delete-btn" onclick="deleteKBFile('${f.source_file.replace(/'/g, "\\'")}')" title="Delete">&times;</button>
+    </div>
+  `).join('');
 }
 
-async function extractCharacters(sbId) {
-  const res = await fetch(`/storyboards/${sbId}/extract-characters`, {method:'POST'});
+async function deleteKBFile(sourceFile) {
+  if (!confirm(`Delete all chunks from "${sourceFile}"?`)) return;
+  const res = await fetch(`/storyboards/${SB_ID}/knowledge-files?source_file=${encodeURIComponent(sourceFile)}`, {method:'DELETE'});
   const data = await res.json();
-  alert(`Extracted characters: ${data.added.join(', ') || 'none new'}`);
+  if (data.ok) loadKBFiles();
 }
 
+// ─── Tabs ────────────────────────────────────────────────────────
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === `tab-${tab}`));
+}
+
+// ─── Generate from Chat (configurable count) ────────────────────
+function generateFromChat() {
+  const n = document.getElementById('episode-count').value || 24;
+  const msg = `Generate ${n} episode outlines and identify all main characters for ${SB_TITLE}`;
+  document.getElementById('chat-input').value = msg;
+  document.getElementById('chat-form').dispatchEvent(new Event('submit'));
+}
+
+// ─── Render helpers ──────────────────────────────────────────────
 function renderEpisodes(episodes) {
   const list = document.getElementById('episode-list');
   list.innerHTML = episodes.map(ep => `
@@ -144,11 +181,76 @@ function renderEpisodes(episodes) {
         <span class="ep-title">${ep.title}</span>
         <span class="status-badge status-draft">draft</span>
       </div>
-      <p class="ep-storyline">${ep.storyline.slice(0,200)}${ep.storyline.length>200?'…':''}</p>
+      <p class="ep-storyline">${(ep.storyline || '').slice(0,200)}${(ep.storyline || '').length>200?'...':''}</p>
     </div>
   `).join('');
+  document.getElementById('ep-count').textContent = `(${episodes.length})`;
 }
 
+function renderCharacters(characters) {
+  const list = document.getElementById('characters-list');
+  if (!characters.length) {
+    list.innerHTML = '<p class="muted">No characters yet.</p>';
+    document.getElementById('char-count').textContent = '(0)';
+    return;
+  }
+  list.innerHTML = characters.map(c => `
+    <div class="ep-item">
+      <div class="ep-header">
+        <span class="ep-title">${c.name}</span>
+        <span class="status-badge status-${c.training_status || 'needs_images'}">${c.training_status || 'needs_images'}</span>
+        ${c.locked ? '<span class="status-badge status-trained">locked</span>' : ''}
+      </div>
+      <p class="ep-storyline">${(c.description || '').slice(0,150)}${(c.description || '').length>150?'...':''}</p>
+    </div>
+  `).join('');
+  document.getElementById('char-count').textContent = `(${characters.length})`;
+}
+
+async function loadCharacters() {
+  const res = await fetch(`/storyboards/${SB_ID}/characters-list`);
+  const characters = await res.json();
+  renderCharacters(characters);
+}
+
+// ─── Add to Storyboard (unified) ────────────────────────────────
+async function addToStoryboard(text) {
+  let summary = [];
+
+  // Try parsing episodes
+  const hasEpisodes = /"episodes"\s*:\s*\[/.test(text) || /"title"/.test(text) || /\d+\.\s*.+[-:–]/.test(text);
+  if (hasEpisodes) {
+    const fd = new FormData();
+    fd.append('content', text);
+    const res = await fetch(`/storyboards/${SB_ID}/parse-episodes-from-chat`, {method:'POST', body:fd});
+    const data = await res.json();
+    if (data.episodes) {
+      renderEpisodes(data.episodes);
+      summary.push(`${data.episodes.length} episodes`);
+    }
+  }
+
+  // Try parsing characters
+  const hasCharacters = /"characters"\s*:\s*\[/.test(text) || /"name"/.test(text);
+  if (hasCharacters) {
+    const fd = new FormData();
+    fd.append('content', text);
+    const res = await fetch(`/storyboards/${SB_ID}/parse-characters-from-chat`, {method:'POST', body:fd});
+    const data = await res.json();
+    if (data.added) {
+      await loadCharacters();
+      summary.push(`${data.added.length} new characters`);
+    }
+  }
+
+  if (summary.length) {
+    alert(`Added to storyboard: ${summary.join(', ')}`);
+  } else {
+    alert('Could not parse episodes or characters from the response.');
+  }
+}
+
+// ─── Schedule ────────────────────────────────────────────────────
 async function saveSchedule(e, sbId) {
   e.preventDefault();
   const fd = new FormData(e.target);
@@ -157,12 +259,7 @@ async function saveSchedule(e, sbId) {
   if (data.ok) alert('Schedule saved!');
 }
 
-function sendQuick(msg) {
-  document.getElementById('chat-input').value = msg;
-  document.getElementById('chat-form').dispatchEvent(new Event('submit'));
-}
-
-// SSE Chat
+// ─── SSE Chat ────────────────────────────────────────────────────
 document.getElementById('chat-form').addEventListener('submit', async function(e) {
   e.preventDefault();
   const input = document.getElementById('chat-input');
@@ -183,6 +280,19 @@ document.getElementById('chat-form').addEventListener('submit', async function(e
     }
     if (data.done) {
       es.close();
+      const text = bubble.textContent;
+      // Detect if response contains episodes or characters
+      const hasCombined = /"episodes"\s*:\s*\[/.test(text);
+      const hasEpisodes = /"title"/.test(text) || /\d+\.\s*.+[-:–]/.test(text);
+      const hasCharacters = /"name"/.test(text);
+      if (hasCombined || hasEpisodes || hasCharacters) {
+        const btn = document.createElement('button');
+        btn.className = 'btn-primary send-to-btn';
+        btn.textContent = 'Add to Storyboard';
+        btn.onclick = () => addToStoryboard(text);
+        assistantDiv.appendChild(btn);
+      }
+      scrollChatToBottom();
     }
   };
   es.onerror = function() { es.close(); };
@@ -202,5 +312,9 @@ function scrollChatToBottom() {
   const c = document.getElementById('chat-messages');
   c.scrollTop = c.scrollHeight;
 }
+
+// ─── Init ────────────────────────────────────────────────────────
+loadKBFiles();
+loadCharacters();
 </script>
 {% endblock %}

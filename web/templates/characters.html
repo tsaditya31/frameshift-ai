@@ -8,6 +8,7 @@
     <h1>Characters</h1>
   </div>
   <div class="header-actions">
+    <button class="btn-secondary" onclick="showAddCharModal()">+ Add Character</button>
     <button class="btn-primary" onclick="extractChars()">Auto-Extract from KB</button>
   </div>
 </div>
@@ -15,34 +16,40 @@
 <div class="character-grid" id="char-grid">
   {% for char in characters %}
   <div class="char-card" id="char-{{ char.id }}">
-    <!-- Hero image -->
-    <div class="char-portrait">
-      {% if char.hero_image_path %}
-      <img src="/output/{{ sb.id }}/characters/{{ char.hero_image_path|basename }}" alt="{{ char.name }}" />
-      {% else %}
-      <div class="char-placeholder">{{ char.name[0] }}</div>
-      {% endif %}
-    </div>
+    <a href="/characters/{{ char.id }}" class="char-card-link">
+      <!-- Hero image -->
+      <div class="char-portrait">
+        {% if char.hero_image_path %}
+        <img src="/output/{{ sb.id }}/characters/{{ char.hero_image_path|basename }}" alt="{{ char.name }}" />
+        {% else %}
+        <div class="char-placeholder">{{ char.name[0] }}</div>
+        {% endif %}
+      </div>
 
-    <div class="char-info">
-      <h3>{{ char.name }}</h3>
-      <p>{{ char.description[:150] }}{% if char.description|length > 150 %}…{% endif %}</p>
-      <span class="status-badge status-{{ char.training_status }}">{{ char.training_status.replace('_', ' ') }}</span>
+      <div class="char-info">
+        <h3>
+          {% if char.locked %}&#x1F512; {% endif %}{{ char.name }}
+        </h3>
+        <p>{{ char.description[:150] }}{% if char.description|length > 150 %}…{% endif %}</p>
+        <span class="status-badge status-{{ char.training_status }}">{{ char.training_status.replace('_', ' ') }}</span>
 
-      {% if char.higgsfield_soul_id %}
-      <p class="soul-id">Soul ID: <code>{{ char.higgsfield_soul_id[:20] }}…</code></p>
-      {% endif %}
-    </div>
+        {% if char.higgsfield_soul_id %}
+        <p class="soul-id">Soul ID: <code>{{ char.higgsfield_soul_id[:20] }}…</code></p>
+        {% endif %}
+      </div>
+    </a>
 
     <div class="char-actions">
+      {% if not char.locked %}
       <!-- Upload ref images -->
       <label class="btn-secondary btn-upload">
         Upload Reference Images
         <input type="file" multiple accept="image/*" style="display:none"
                onchange="uploadRefs({{ char.id }}, this.files)" />
       </label>
+      {% endif %}
 
-      {% if char.training_status == 'ready_to_train' %}
+      {% if char.training_status == 'ready_to_train' and not char.locked %}
       <button class="btn-primary" onclick="trainChar({{ char.id }})">Train Soul ID</button>
       {% elif char.training_status == 'training' %}
       <div class="progress-bar"><div class="progress-fill" style="width:60%"></div></div>
@@ -56,6 +63,25 @@
     <p>No characters yet. Auto-extract from the knowledge base, or add manually.</p>
   </div>
   {% endfor %}
+
+  <!-- Add Character Modal -->
+  <div id="add-char-modal" class="modal-overlay" style="display:none">
+    <div class="modal">
+      <h2>Add Character</h2>
+      <form action="/storyboards/{{ sb.id }}/characters/new" method="POST">
+        <label>Name
+          <input type="text" name="name" required placeholder="Character name" />
+        </label>
+        <label>Description
+          <textarea name="description" rows="4" placeholder="Physical appearance, personality, backstory..."></textarea>
+        </label>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" onclick="hideAddCharModal()">Cancel</button>
+          <button type="submit" class="btn-primary">Add Character</button>
+        </div>
+      </form>
+    </div>
+  </div>
 </div>
 {% endblock %}
 
@@ -97,6 +123,13 @@ async function genHeroImage(charId) {
     alert('Generating hero image...');
     pollCharStatus(charId);
   }
+}
+
+function showAddCharModal() {
+  document.getElementById('add-char-modal').style.display = 'flex';
+}
+function hideAddCharModal() {
+  document.getElementById('add-char-modal').style.display = 'none';
 }
 
 function pollCharStatus(charId) {
