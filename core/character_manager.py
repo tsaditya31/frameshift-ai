@@ -53,32 +53,26 @@ async def extract_characters(sb: Storyboard, kb_chunks: List[KnowledgeChunk]) ->
     return []
 
 
-async def _upload_image_to_higgsfield(image_path: Path) -> Optional[str]:
-    """Upload a local image file to Higgsfield and return a public URL."""
-    try:
-        content_type = "image/jpeg"
-        suffix = image_path.suffix.lower()
-        if suffix == ".png":
-            content_type = "image/png"
-        elif suffix == ".webp":
-            content_type = "image/webp"
+def _get_public_base_url() -> str:
+    """Get the app's public base URL (Railway or localhost)."""
+    import os
+    domain = os.environ.get("RAILWAY_PUBLIC_DOMAIN", "")
+    if domain:
+        return f"https://{domain}"
+    port = settings.port
+    return f"http://localhost:{port}"
 
-        async with httpx.AsyncClient(timeout=60) as http:
-            resp = await http.post(
-                f"{HIGGSFIELD_BASE}/v1/uploads",
-                headers={
-                    "hf-api-key": settings.higgsfield_api_key,
-                    "hf-secret": settings.higgsfield_api_secret,
-                    "Content-Type": content_type,
-                },
-                content=image_path.read_bytes(),
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            return data.get("url", "")
-    except Exception as e:
-        print(f"[character_manager] Image upload failed for {image_path}: {e}")
-        return None
+
+def _local_path_to_public_url(image_path: Path) -> Optional[str]:
+    """Convert a local image path to a public URL served by the app."""
+    # Images are under knowledge/ which is mounted at /knowledge
+    path_str = str(image_path)
+    knowledge_dir = settings.knowledge_dir
+    if knowledge_dir in path_str:
+        relative = path_str.split(knowledge_dir, 1)[1].lstrip("/")
+        base = _get_public_base_url()
+        return f"{base}/knowledge/{relative}"
+    return None
 
 
 async def start_soul_training(char_id: int):
@@ -101,15 +95,15 @@ async def start_soul_training(char_id: int):
         await db.commit()
 
     try:
-        # Upload images and collect public URLs
+        # Convert local paths to public URLs (served by the app)
         image_urls = []
         for img_path in image_paths:
-            url = await _upload_image_to_higgsfield(img_path)
+            url = _local_path_to_public_url(img_path)
             if url:
                 image_urls.append(url)
 
         if not image_urls:
-            raise ValueError("No images could be uploaded")
+            raise ValueError("No images have public URLs — is RAILWAY_PUBLIC_DOMAIN set?")
 
         # Create character reference via Higgsfield API
         async with httpx.AsyncClient(timeout=30) as http:
