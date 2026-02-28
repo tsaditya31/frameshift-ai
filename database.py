@@ -167,15 +167,6 @@ class UploadSchedule(Base):
 async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-        # Migration: add user_id column to existing storyboards table
-        try:
-            await conn.execute(
-                __import__("sqlalchemy").text(
-                    "ALTER TABLE storyboards ADD COLUMN user_id INTEGER REFERENCES users(id)"
-                )
-            )
-        except Exception:
-            pass  # Column already exists
 
 
 async def get_db():
