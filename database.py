@@ -11,7 +11,18 @@ from config import get_settings
 
 settings = get_settings()
 
-engine = create_async_engine(settings.database_url, echo=False)
+
+def _get_db_url() -> str:
+    url = settings.database_public_url or settings.database_url
+    # Railway provides postgres:// but SQLAlchemy needs postgresql+asyncpg://
+    if url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql+asyncpg://", 1)
+    elif url.startswith("postgresql://"):
+        url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    return url
+
+
+engine = create_async_engine(_get_db_url(), echo=False)
 async_session = async_sessionmaker(engine, expire_on_commit=False)
 
 

@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     youtube_client_secret: str = ""
 
     database_url: str = "sqlite+aiosqlite:///./frameshift.db"
+    database_public_url: str = ""  # Railway Postgres public URL (fallback)
     host: str = "0.0.0.0"
     port: int = 8000
 

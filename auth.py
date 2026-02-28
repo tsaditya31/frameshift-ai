@@ -1,3 +1,4 @@
+import logging
 import secrets
 import smtplib
 import asyncio
@@ -5,6 +6,8 @@ from datetime import datetime, timedelta
 from email.mime.text import MIMEText
 from typing import Optional
 from urllib.parse import urlencode
+
+logger = logging.getLogger(__name__)
 
 import httpx
 from fastapi import APIRouter, Request, Form, Depends
@@ -113,13 +116,21 @@ async def login(
     password: str = Form(...),
     db: AsyncSession = Depends(get_db),
 ):
+    logger.info(f"Login attempt for email: {email.lower()}")
     user = (await db.execute(select(User).where(User.email == email.lower()))).scalar_one_or_none()
+    if not user:
+        logger.warning(f"Login failed: no user found for {email.lower()}")
+    elif not user.password_hash:
+        logger.warning(f"Login failed: user {email.lower()} has no password (OAuth-only account?)")
+    elif not verify_password(password, user.password_hash):
+        logger.warning(f"Login failed: wrong password for {email.lower()}")
     if not user or not user.password_hash or not verify_password(password, user.password_hash):
         return templates.TemplateResponse(
             "login.html",
             {"request": request, "error": "Invalid email or password", "google_enabled": _google_enabled()},
             status_code=401,
         )
+    logger.info(f"Login success for {email.lower()} (user_id={user.id})")
     request.session["user_id"] = user.id
     return RedirectResponse("/", status_code=303)
 
@@ -166,6 +177,7 @@ async def register(
     db.add(user)
     await db.commit()
     await db.refresh(user)
+    logger.info(f"Registered new user: {email.lower()} (user_id={user.id})")
     request.session["user_id"] = user.id
     return RedirectResponse("/", status_code=303)
 
