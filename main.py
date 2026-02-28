@@ -284,8 +284,6 @@ async def chat_stream(
             if await request.is_disconnected():
                 break
 
-        async with db.__class__(bind=db.get_bind()) as new_session:
-            pass
         from database import async_session
         async with async_session() as sess:
             asst_msg = ChatMessage(storyboard_id=sb_id, role="assistant", content=full_response)

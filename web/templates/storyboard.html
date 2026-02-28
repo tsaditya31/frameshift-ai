@@ -243,6 +243,16 @@ async function addToStoryboard(text) {
     }
   }
 
+  // Auto-extract characters from knowledge base if episodes were added but no characters found
+  if (summary.length && !summary.some(s => s.includes('characters'))) {
+    const extractRes = await fetch(`/storyboards/${SB_ID}/extract-characters`, {method:'POST'});
+    const extractData = await extractRes.json();
+    if (extractData.added && extractData.added.length) {
+      await loadCharacters();
+      summary.push(`${extractData.added.length} characters extracted`);
+    }
+  }
+
   if (summary.length) {
     alert(`Added to storyboard: ${summary.join(', ')}`);
   } else {
