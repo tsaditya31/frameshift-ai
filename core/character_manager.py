@@ -111,7 +111,13 @@ async def start_soul_training(char_id: int):
             resp = await http.post(
                 f"{HIGGSFIELD_BASE}/v1/custom-references",
                 headers=_hf_headers(),
-                json={"name": char.name, "input_images": image_urls},
+                json={
+                    "name": char.name,
+                    "input_images": [
+                        {"type": "image_url", "image_url": url}
+                        for url in image_urls
+                    ],
+                },
             )
             print(f"[character_manager] Higgsfield response {resp.status_code}: {resp.text}")
             resp.raise_for_status()
