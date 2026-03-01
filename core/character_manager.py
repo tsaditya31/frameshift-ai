@@ -106,12 +106,14 @@ async def start_soul_training(char_id: int):
             raise ValueError("No images have public URLs — is RAILWAY_PUBLIC_DOMAIN set?")
 
         # Create character reference via Higgsfield API
+        print(f"[character_manager] Creating character '{char.name}' with {len(image_urls)} images: {image_urls}")
         async with httpx.AsyncClient(timeout=30) as http:
             resp = await http.post(
                 f"{HIGGSFIELD_BASE}/v1/custom-references",
                 headers=_hf_headers(),
                 json={"name": char.name, "image_urls": image_urls},
             )
+            print(f"[character_manager] Higgsfield response {resp.status_code}: {resp.text}")
             resp.raise_for_status()
             data = resp.json()
 
