@@ -226,11 +226,11 @@ async def _generate_scene_image(scene: dict, soul_map: dict, out_path: Path, ep_
     return False
 
 
-async def _poll_job_set(job_set_id: str, timeout: int = 120) -> Optional[str]:
+async def _poll_job_set(job_set_id: str) -> Optional[str]:
     """Poll a Higgsfield job set until completion. Returns image URL on success."""
-    elapsed = 0
     interval = 5
-    while elapsed < timeout:
+    elapsed = 0
+    while True:
         try:
             async with httpx.AsyncClient(timeout=30) as http:
                 resp = await http.get(
@@ -240,6 +240,7 @@ async def _poll_job_set(job_set_id: str, timeout: int = 120) -> Optional[str]:
                 resp.raise_for_status()
                 data = resp.json()
                 status = data.get("status", "")
+                print(f"[video_producer] Job {job_set_id} status={status} (elapsed={elapsed}s)")
                 if status == "completed":
                     jobs = data.get("jobs", [])
                     if jobs:
@@ -255,9 +256,6 @@ async def _poll_job_set(job_set_id: str, timeout: int = 120) -> Optional[str]:
 
         await asyncio.sleep(interval)
         elapsed += interval
-
-    print(f"[video_producer] Job {job_set_id} timed out")
-    return None
 
 
 async def _ken_burns_animate(

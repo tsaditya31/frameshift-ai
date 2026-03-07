@@ -145,11 +145,11 @@ async def start_soul_training(char_id: int):
         print(f"[character_manager] Soul training failed for {char_id}: {e}")
 
 
-async def _poll_character_status(character_id: str, timeout: int = 300) -> Optional[str]:
+async def _poll_character_status(character_id: str) -> Optional[str]:
     """Poll Higgsfield until character reference is ready. Returns character ID on success."""
-    elapsed = 0
     interval = 5
-    while elapsed < timeout:
+    elapsed = 0
+    while True:
         try:
             async with httpx.AsyncClient(timeout=30) as http:
                 resp = await http.get(
@@ -159,6 +159,7 @@ async def _poll_character_status(character_id: str, timeout: int = 300) -> Optio
                 resp.raise_for_status()
                 data = resp.json()
                 status = data.get("status", "")
+                print(f"[character_manager] Character {character_id} status={status} (elapsed={elapsed}s)")
                 if status == "completed":
                     return character_id
                 if status in ("failed", "error"):
@@ -170,15 +171,12 @@ async def _poll_character_status(character_id: str, timeout: int = 300) -> Optio
         await asyncio.sleep(interval)
         elapsed += interval
 
-    print(f"[character_manager] Character {character_id} timed out after {timeout}s")
-    return None
 
-
-async def _poll_job_set(job_set_id: str, timeout: int = 120) -> Optional[str]:
+async def _poll_job_set(job_set_id: str) -> Optional[str]:
     """Poll a Higgsfield job set until completion. Returns image URL on success."""
-    elapsed = 0
     interval = 5
-    while elapsed < timeout:
+    elapsed = 0
+    while True:
         try:
             async with httpx.AsyncClient(timeout=30) as http:
                 resp = await http.get(
@@ -188,8 +186,8 @@ async def _poll_job_set(job_set_id: str, timeout: int = 120) -> Optional[str]:
                 resp.raise_for_status()
                 data = resp.json()
                 status = data.get("status", "")
+                print(f"[character_manager] Job {job_set_id} status={status} (elapsed={elapsed}s)")
                 if status == "completed":
-                    # Extract image URL from results
                     jobs = data.get("jobs", [])
                     if jobs:
                         outputs = jobs[0].get("outputs", [])
@@ -204,9 +202,6 @@ async def _poll_job_set(job_set_id: str, timeout: int = 120) -> Optional[str]:
 
         await asyncio.sleep(interval)
         elapsed += interval
-
-    print(f"[character_manager] Job {job_set_id} timed out")
-    return None
 
 
 async def generate_hero_image(char_id: int):
